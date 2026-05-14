@@ -1,0 +1,8 @@
+{
+    "unit": "Alpha",
+    "modifications": [
+        "S3_Ingestion",
+        "OpenAI_Sync"
+    ],
+    "firmware": "v2.1.4"
+}

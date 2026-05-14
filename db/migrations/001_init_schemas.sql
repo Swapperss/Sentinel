@@ -1,0 +1,12 @@
+CREATE DATABASE IF NOT EXISTS sentinel_admin;
+CREATE DATABASE IF NOT EXISTS sentinel_db;
+CREATE DATABASE IF NOT EXISTS sentinel_landing;
+CREATE DATABASE IF NOT EXISTS sentinel_curation;
+CREATE DATABASE IF NOT EXISTS sentinel_consumption;
+CREATE DATABASE IF NOT EXISTS sentinel_analytics;
+
+
+CREATE TABLE IF NOT EXISTS sentinel_admin.schema_migrations (
+    version VARCHAR(64) PRIMARY KEY,
+    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

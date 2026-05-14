@@ -1,0 +1,7 @@
+{
+    "unit": "Gamma",
+    "alert_thresholds": {
+        "max_temp": 110,
+        "min_v": 11.5
+    }
+}

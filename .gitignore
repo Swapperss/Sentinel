@@ -1,0 +1,49 @@
+# Environment
+.env
+.env.local
+D:\Swapnil\DSML_LLM\AILLM\Projects\Sentinal\data\kaggle.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs & Temp
+logs/
+*.log
+.DS_Store
+
+# Docker volumes
+airflow-postgres-data/
+docker/airflow/logs/
+docker/debezium/logs/

@@ -1,0 +1,26 @@
+{
+  "name": "sentinel-mysql-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.mysql.MySqlConnector",
+    "database.hostname": "host.docker.internal",
+    "database.port": "3306",
+    "database.user": "debezium",
+    "database.password": "dbz_password",
+    "database.server.id": "184054",
+    "topic.prefix": "cdc_prod",
+    "database.include.list": "sentinel_db",
+    "table.include.list": "sentinel_db.vehicles_sentinel",
+    "schema.history.internal.kafka.bootstrap.servers": "${env:KAFKA_BOOTSTRAP_SERVER}",
+    "schema.history.internal.kafka.topic": "dbz-schema-history",
+    "schema.history.internal.producer.security.protocol": "SASL_SSL",
+    "schema.history.internal.producer.sasl.mechanism": "PLAIN",
+    "schema.history.internal.producer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username='${env:KAFKA_API_KEY}' password='${env:KAFKA_API_SECRET}';",
+    "schema.history.internal.consumer.security.protocol": "SASL_SSL",
+    "schema.history.internal.consumer.sasl.mechanism": "PLAIN",
+    "schema.history.internal.consumer.sasl.jaas.config": "org.apache.kafka.common.security.plain.PlainLoginModule required username='${env:KAFKA_API_KEY}' password='${env:KAFKA_API_SECRET}';",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": "false",
+    "value.converter.schemas.enable": "false"
+  }
+}

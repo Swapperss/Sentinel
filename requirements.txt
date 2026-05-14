@@ -1,0 +1,14 @@
+numpy
+pandas
+pyspark
+matplotlib
+protobuf
+confluent-kafka[protobuf]
+dotenv
+grpcio-tools #translate .proto files to python code
+scikit-learn
+boto3
+chromadb
+openai
+mysql-connector-python
+python-dotenv
