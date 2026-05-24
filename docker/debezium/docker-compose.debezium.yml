@@ -52,3 +52,4 @@ services:
       
       # JVM Optimization for your laptop memory
       KAFKA_HEAP_OPTS: "-Xms512M -Xmx1G"
+

@@ -108,3 +108,59 @@ This corpus is a living question bank derived from the architecture and implemen
 6. Why should consumption views mirror curation columns instead of re-deriving business logic?
 7. How would you validate that a newly added column is present in all required layers after a migration?
 8. If a new upstream field arrives with partial nulls, how do you decide whether it belongs in source, landing, curation, or analytics?
+
+## 14) Answered Interview Corpus: CDC Replay, Contracts, and End-to-End Flow
+1. Q: What was the root cause of the vehicle pipeline failure?
+	A: The pipeline was treating the vehicle CDC consumer like a pure streaming tailer, but the DAG expected batch-style replay of the same run's generated data. The consumer used a stable group with `auto.offset.reset=latest`, so it started after the new events had already landed and saw zero records. That caused the landing checks to fail below the expected 100-row threshold.
+2. Q: Why did telemetry continue working when vehicle CDC failed?
+	A: The telemetry path and vehicle CDC path had different timing and offset behavior. Telemetry already had a backlog or compatible offsets, so it could consume records successfully. Vehicle CDC was more sensitive because the run was generating source rows and then trying to consume them in the same orchestration window.
+3. Q: What change fixed the vehicle CDC issue?
+	A: The DAG now forces replay-safe consumption by switching the vehicle CDC loader to `offset_reset=earliest` when the run has expected source rows. That lets the consumer replay the relevant topic history and catch up to the run's generated changes instead of missing them.
+4. Q: Why is `latest` correct in some systems but wrong here?
+	A: `latest` is correct for a long-running tailer that only needs future events. It is wrong for a DAG-run-local batch contract because the data may already exist by the time the consumer starts. In that case, you need replay semantics, not tail-only semantics.
+5. Q: Why did the pipeline need both checkpoint-safe and threshold-based validation?
+	A: Checkpoint-safe logic prevents false failures when a task legitimately processes zero records in a run. Threshold-based validation makes sure the pipeline still enforces business correctness when data is expected. Together, they separate "no data available" from "data was expected but not processed."
+6. Q: Why add relational curation sync if a semantic bridge already existed?
+	A: The semantic bridge wrote AI-curated outputs, but the relational curation tables were still part of the downstream contract for analytics. The pipeline needed a deterministic sync from landing into curation so analytics could build on curated relational data even if AI-assisted enrichment only covered part of the flow.
+7. Q: How do you explain idempotency in this pipeline?
+	A: Idempotency means rerunning the same record does not create duplicate business state. In CDC and telemetry consumers, that is usually achieved with stable event keys, upserts, and unique constraints. The goal is that retries, rebalances, or replays produce the same final table state.
+8. Q: What is the purpose of append-only event tables alongside snapshot tables?
+	A: Snapshot tables answer the question "what is the latest state?" Event tables answer "what happened, when, and how many times?" The event tables preserve lineage, support debugging, and make replay or audit scenarios possible without losing the change history.
+9. Q: How would you test this kind of pipeline before calling it production-ready?
+	A: I would test create, update, and delete semantics for CDC; verify replay behavior after offset resets; confirm that landing, curation, and analytics counts reach the expected threshold; and run integration checks that compare source row counts against downstream rows. I would also test failure recovery, schema drift, and duplicate-message handling.
+10. Q: What is the main design lesson from this bug?
+	 A: The key lesson is that orchestration semantics and consumer semantics must match. If the pipeline is designed as a run-scoped batch contract, every stage must either replay the relevant inputs or operate on already-materialized data. A stable streaming consumer alone is not enough.
+
+## 15) Quick Answers for Practice
+1. Q: Why did the landing count need a minimum threshold instead of an exact count?
+	A: A minimum threshold verifies the pipeline processed at least the expected dataset while still allowing extra records from retries, backlog, or replay. It is more robust than an exact count in CDC systems where duplicate-safe processing and historical records are normal.
+2. Q: Why do we keep telemetry facts and telemetry ingest events separate?
+	A: The facts table stores analytical business data, while the ingest-events table stores operational lineage and processing status. Separating them keeps analytics clean and gives you a durable audit trail for debugging.
+3. Q: How do curation and analytics stay consistent after reruns?
+	A: They stay consistent through deterministic upserts, stable keys, and rerunnable population logic. A rerun should converge to the same final state instead of appending conflicting duplicates.
+4. Q: Why is schema drift dangerous in layered data platforms?
+	A: Schema drift can break consumers at different layers in different ways. A field that is optional in landing may be required in analytics, so migrations and transformations must be version-aware and tolerant of nullable evolution.
+5. Q: What would you say in an interview about this project improvement?
+	A: I would explain that I moved the platform from a fragile streaming assumption to an explicit end-to-end data contract. That included replay-safe ingestion, stronger validation, deterministic curation sync, and downstream checks that proved the data really flowed through every layer.
+
+## 16) Realtime Design: Late Logs, Offsets, and Completeness SLA
+1. Q: If vehicle CDC and telemetry arrive today, but diagnostic logs arrive after 2 to 3 days, should enrichment still happen?
+	A: Yes. The correct design is eventual enrichment. Late logs must still be consumed and correlated to existing vehicle and telemetry data when they arrive.
+2. Q: Why is offset-based ingestion important for late-arriving logs?
+	A: Offsets provide replay-safe consumption and ordering within a partition. If consumers are restartable and idempotent, late events are still processed without data loss or duplicated business state.
+3. Q: Why is strict same-day completeness usually wrong for realtime systems?
+	A: Realtime pipelines are eventually consistent. Network delays, producer lag, and upstream retries can shift arrival time. Same-day hard checks can create false failures even when data arrives shortly after.
+4. Q: What keys should be used to correlate late logs with prior telemetry and vehicle records?
+	A: Use durable business and lineage keys such as VIN, correlation_id, file_id, and event time windows. Avoid relying only on ingestion date.
+5. Q: How do you prevent duplicates when late logs are replayed or reprocessed?
+	A: Use deterministic upsert keys (for example vehicle_id + event_timestamp, or stable correlation_id), unique constraints, and idempotent write logic in curation tables.
+6. Q: Should a DAG fail immediately if logs are missing for today's VINs?
+	A: Not in an eventual-consistency model. It should record pending enrichment status, continue core processing, and let a reconciliation task finalize completeness within a defined SLA window.
+7. Q: What SLA pattern is practical for AI curation completeness?
+	A: Use staged SLO/SLA targets, such as 95% enrichment within 24 hours and 100% within 72 hours, then alert only if unresolved after the deadline.
+8. Q: What operational controls are needed for this design?
+	A: Add lag-aware monitoring, pending backlog counts, reconciliation retries, and dead-letter handling with reason codes so unresolved VINs are auditable and actionable.
+9. Q: How should interviewers evaluate this architecture decision?
+	A: Strong answers distinguish between hard correctness for core facts and eventual completeness for late context signals. The design should prioritize no data loss, idempotency, and measurable recovery windows.
+10. Q: What is the final business guarantee in this model?
+	A: Every eligible vehicle record is eventually enriched when supporting logs arrive, and unresolved cases are explicitly tracked, retried, and escalated by SLA rather than silently dropped.

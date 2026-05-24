@@ -47,3 +47,10 @@ logs/
 airflow-postgres-data/
 docker/airflow/logs/
 docker/debezium/logs/
+
+# Generated Sentinel data artifacts
+data/landing/sentinel_landing/sentinel_s3_landing/logs/
+data/landing/sentinel_landing/sentinel_s3_landing/notes/
+data/landing/sentinel_landing/sentinel_s3_landing/metadata/
+data/landing/sentinel_landing/vectors/sentinel_unstructured/
+

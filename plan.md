@@ -229,12 +229,16 @@ Phase E is Priority-1 and must be executed first before the remaining roadmap ph
 
 ---
 
-## 10) Immediate Next Step (When Approved)
-1. Create migration for star schema tables in `sentinel_analytics`:
-   - `dim_vehicle`
-   - `dim_time`
-   - `dim_diagnostic_type`
-   - `fct_vehicle_telemetry`
-   - `fct_vehicle_health_event`
+## 10) Immediate Next Step (Current Checkpoint)
+1. Confirm ETL infra DAG health:
+   - `sentinel_pipeline` is active and running (`db_migrate` -> `pipeline_complete`).
+2. Run the data pipeline DAG for AI ingestion/curation:
+   - unpause `sentinel_data_pipeline`
+   - trigger manual run after fresh landing files are generated
+   - verify tasks: `wait_for_complete_sentinel_batch` -> `ingestion_layer_processing` -> `curation_layer_correlation`
+3. Validate curation outputs after DAG success:
+   - row count and latest records in `sentinel_curation.sentinel_ai_curation`
+   - correlation quality between notes/logs metadata and telemetry.
 
-This will be executed as one step, then wait for `done`.
+Interview takeaway:
+Operational readiness requires two separate controls: infrastructure/schema DAG stability and data-quality DAG execution against fresh batches.

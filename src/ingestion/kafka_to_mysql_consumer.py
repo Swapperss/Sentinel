@@ -1,5 +1,6 @@
 import os
 import json
+import time
 from datetime import datetime, timezone
 
 from dotenv import load_dotenv
@@ -24,17 +25,16 @@ def fahrenheit_to_celsius(temp_f):
     return (temp_f - 32.0) * 5.0 / 9.0
 
 
-def build_consumer():
+def build_consumer(group_id=None, offset_reset=None):
     consumer_config = {
         "bootstrap.servers": os.getenv("KAFKA_BOOTSTRAP_SERVER"),
         "security.protocol": "SASL_SSL",
         "sasl.mechanisms": "PLAIN",
         "sasl.username": os.getenv("KAFKA_API_KEY"),
         "sasl.password": os.getenv("KAFKA_API_SECRET"),
-        "group.id": CONSUMER_GROUP,
-        "auto.offset.reset": os.getenv("KAFKA_AUTO_OFFSET_RESET", "latest"),
-        #"auto.offset.reset": os.getenv("KAFKA_AUTO_OFFSET_RESET", "earliest"),
-        "enable.auto.commit": True,
+        "group.id": group_id or CONSUMER_GROUP,
+        "auto.offset.reset": offset_reset or os.getenv("KAFKA_AUTO_OFFSET_RESET", "latest"),
+        "enable.auto.commit": False,
     }
     return Consumer(consumer_config)
 
@@ -128,7 +128,7 @@ def upsert_telemetry_ingest_event(
     cursor.execute(query, values)
 
 
-def run_loader():
+def run_loader(max_events=None, idle_timeout_seconds=None, group_id=None, offset_reset=None):
     logger = get_logger("KAFKA_TO_MYSQL")
 
     schema_registry_client = SchemaRegistryClient(
@@ -142,11 +142,20 @@ def run_loader():
         VehicleTelemetry,
         schema_registry_client=schema_registry_client,
     )
-    consumer = build_consumer()
+    consumer = build_consumer(group_id=group_id, offset_reset=offset_reset)
     db = get_landing_connection()
     cursor = db.cursor()
+    last_message_ts = time.time()
+    effective_group = group_id or CONSUMER_GROUP
 
-    logger.info(f"Subscribing to topic {TOPIC_NAME} with group {CONSUMER_GROUP}")
+    logger.info(
+        "Subscribing to topic %s with group %s offset_reset=%s max_events=%s idle_timeout_seconds=%s",
+        TOPIC_NAME,
+        effective_group,
+        offset_reset or os.getenv("KAFKA_AUTO_OFFSET_RESET", "latest"),
+        max_events,
+        idle_timeout_seconds,
+    )
     consumer.subscribe([TOPIC_NAME])
 
     processed = 0
@@ -155,6 +164,9 @@ def run_loader():
         while True:
             msg = consumer.poll(1.0)
             if msg is None:
+                if idle_timeout_seconds is not None and (time.time() - last_message_ts) >= idle_timeout_seconds:
+                    logger.info("Idle timeout reached. Stopping telemetry loader.")
+                    break
                 continue
             if msg.error():
                 logger.error(f"Kafka error: {msg.error()}")
@@ -174,7 +186,7 @@ def run_loader():
                     "event_time": telemetry.event_time.ToJsonString() if telemetry.HasField("event_time") else None,
                     "speed_kmh": telemetry.metrics.speed_kmh,
                     "engine_temp_f": telemetry.metrics.engine_temp_f,
-                    "fuel_level": telemetry.metrics.fuel_level,
+                    "battery_soc": telemetry.metrics.battery_soc,
                 }
             )
 
@@ -200,7 +212,9 @@ def run_loader():
                     error_message=None,
                 )
                 db.commit()
+                consumer.commit(message=msg, asynchronous=False)
                 processed += 1
+                last_message_ts = time.time()
                 logger.info(
                     f"event=telemetry_ingest_processed result=success event_key={event_key} "
                     f"vehicle_id={telemetry.vin} topic={msg.topic()} partition={msg.partition()} offset={msg.offset()}"
@@ -231,6 +245,10 @@ def run_loader():
             if processed % 20 == 0:
                 logger.info(f"Processed {processed} records into telemetry_facts")
 
+            if max_events is not None and processed >= max_events:
+                logger.info("Max events reached. Stopping telemetry loader.")
+                break
+
     except KeyboardInterrupt:
         logger.info("Stopped by user")
     finally:
@@ -238,6 +256,7 @@ def run_loader():
         db.close()
         consumer.close()
         logger.info(f"Loader stopped. total_processed={processed}")
+    return processed
 
 
 if __name__ == "__main__":
